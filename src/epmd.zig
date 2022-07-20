@@ -13,24 +13,48 @@ const TAG_ALIVE2_REQ: u8 = 120;
 const TAG_ALIVE2_RESP: u8 = 121;
 const TAG_PORT_PLEASE2_REQ: u8 = 122;
 
+pub const NODE_TYPE_NORMAL: u8 = 72;
+pub const NODE_TYPE_HIDDEN: u8 = 77;
+
+pub const PROTOCOL_TCP_IP_V4: u8 = 0;
+
+pub const DEFAULT_HIGHEST_VERSION: u16 = 6;
+pub const DEFAULT_LOWEST_VERSION: u16 = 5;
+
 pub const NodeEntry = struct {
     const Self = @This();
 
-    allocator: Allocator,
+    allocator: ?Allocator = null,
 
     name: []u8,
     port: u16,
-    node_type: u8,
-    protocol: u8,
-    highest_version: u16,
-    lowest_version: u16,
-    extra: []u8,
+    node_type: u8 = NODE_TYPE_NORMAL,
+    protocol: u8 = PROTOCOL_TCP_IP_V4,
+    highest_version: u16 = DEFAULT_HIGHEST_VERSION,
+    lowest_version: u16 = DEFAULT_LOWEST_VERSION,
+    extra: ?[]u8 = null,
 
     pub fn deinit(self: Self) void {
-        self.allocator.free(self.name);
-        self.allocator.free(self.extra);
+        if (self.allocator) |allocator| {
+            allocator.free(self.name);
+            if (self.extra) |extra| {
+                allocator.free(extra);
+            }
+        }
+    }
+
+    fn len(self: Self) usize {
+        return 2 + self.name.len + // name
+            2 + // port
+            1 + // node_type
+            1 + // protocol
+            2 + // highest_version
+            2 + // lowest_version
+            2 + if (self.extra) |e| e.len else 0; // extra
     }
 };
+
+pub const Creation = u32;
 
 pub const EpmdClient = struct {
     const Self = @This();
@@ -40,6 +64,41 @@ pub const EpmdClient = struct {
     pub fn connect(epmd_addr: net.Address) !Self {
         const connection = try net.tcpConnectToAddress(epmd_addr);
         return Self{ .connection = connection };
+    }
+
+    pub fn registerNode(self: Self, node: NodeEntry) !Creation {
+        // Request.
+        const size = @intCast(u16, 1 + node.len());
+        try self.writeU16(size);
+        try self.writeU8(TAG_ALIVE2_REQ);
+        try self.writeU16(node.port);
+        try self.writeU8(node.node_type);
+        try self.writeU8(node.protocol);
+        try self.writeU16(node.highest_version);
+        try self.writeU16(node.lowest_version);
+        try self.writeLengthPrefixedBytes(node.name);
+        try self.writeLengthPrefixedBytes(if (node.extra) |e| e else &.{});
+
+        // Response.
+        switch (try self.readU8()) {
+            TAG_ALIVE2_RESP => {
+                if ((try self.readU8()) != 0) {
+                    return error.RegisterNodeError;
+                }
+                const creation = try self.readU16();
+                return @intCast(u32, creation);
+            },
+            TAG_ALIVE2_X_RESP => {
+                if ((try self.readU8()) != 0) {
+                    return error.RegisterNodeError;
+                }
+                const creation = try self.readU32();
+                return creation;
+            },
+            else => {
+                return error.UnexpectedAlive2ResponseTag;
+            },
+        }
     }
 
     pub fn getNode(self: Self, node_name: []u8, allocator: Allocator) !?NodeEntry {
@@ -140,6 +199,11 @@ pub const EpmdClient = struct {
         return mem.readIntBig(u16, &bytes);
     }
 
+    fn readU32(self: Self) !u32 {
+        const bytes = try self.readN(4);
+        return mem.readIntBig(u32, &bytes);
+    }
+
     fn readLengthPrefixedBytes(self: Self, allocator: Allocator) ![]u8 {
         const len = try self.readU16();
         const buf = try allocator.alloc(u8, len);
@@ -172,6 +236,11 @@ pub const EpmdClient = struct {
         var buf = [_]u8{ 0, 0 };
         mem.writeIntBig(u16, &buf, v);
         return self.writeAll(&buf);
+    }
+
+    fn writeLengthPrefixedBytes(self: Self, bytes: []u8) !void {
+        try self.writeU16(@intCast(u16, bytes.len));
+        try self.writeAll(bytes);
     }
 
     fn writeAll(self: Self, buf: []const u8) !void {
