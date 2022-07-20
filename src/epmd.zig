@@ -44,13 +44,13 @@ pub const NodeEntry = struct {
     }
 
     fn len(self: Self) usize {
-        return 2 + self.name.len + // name
-            2 + // port
-            1 + // node_type
-            1 + // protocol
-            2 + // highest_version
-            2 + // lowest_version
-            2 + if (self.extra) |e| e.len else 0; // extra
+        return @sizeOf(u16) + self.name.len +
+            @sizeOf(@TypeOf(self.port)) +
+            @sizeOf(@TypeOf(self.node_type)) +
+            @sizeOf(@TypeOf(self.protocol)) +
+            @sizeOf(@TypeOf(self.highest_version)) +
+            @sizeOf(@TypeOf(self.lowest_version)) +
+            @sizeOf(u16) + if (self.extra) |e| e.len else 0;
     }
 };
 
