@@ -13,7 +13,7 @@ Registered node: creation=1658309464
 
 Please enter a key to terminate this process and to deregister the node.
 
-// In another shell, get the above node infomartion.
+// In another shell, get the above node information.
 $ zig run examples/get-node.zig --main-pkg-path ../ -- foo
 Node:
 - name: foo
