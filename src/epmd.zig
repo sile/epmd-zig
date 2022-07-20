@@ -4,6 +4,7 @@ const mem = std.mem;
 const Allocator = mem.Allocator;
 const ArrayList = std.ArrayList;
 
+const TAG_KILL_REQ: u8 = 107;
 const TAG_NAMES_REQ: u8 = 110;
 
 pub const EpmdClient = struct {
@@ -16,7 +17,7 @@ pub const EpmdClient = struct {
         return Self{ .connection = connection };
     }
 
-    pub fn getNames(self: *Self, allocator: Allocator) !ArrayList(u8) {
+    pub fn getNames(self: Self, allocator: Allocator) !ArrayList(u8) {
         // Request.
         try self.writeU16(1); // length
         try self.writeU8(TAG_NAMES_REQ);
@@ -26,6 +27,17 @@ pub const EpmdClient = struct {
         const names = try self.readAll(allocator);
 
         return names;
+    }
+
+    pub fn kill(self: Self, allocator: Allocator) !ArrayList(u8) {
+        // Request.
+        try self.writeU16(1); // length
+        try self.writeU8(TAG_KILL_REQ);
+
+        // Response.
+        const result = try self.readAll(allocator);
+
+        return result;
     }
 
     pub fn deinit(self: Self) void {
