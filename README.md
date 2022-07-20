@@ -2,5 +2,5 @@ erldist
 =======
 
 ```console
-$ zig run examples/epmd-get-names.zig --main-pkg-path ../
+$ zig run examples/get-names.zig --main-pkg-path ../
 ```
