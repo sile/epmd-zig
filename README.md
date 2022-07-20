@@ -3,6 +3,11 @@ epmd
 
 EPMD (Erlang Port Mapping Daemon) client in Zig.
 
+Zig Version
+-----------
+
+v0.9.1
+
 Examples
 --------
 
